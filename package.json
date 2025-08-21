@@ -1,0 +1,24 @@
+{
+  "name": "agsub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agricultural Subsidy & Program Enrollment Agent",
+  "scripts": {
+    "dev": "pnpm run --parallel dev",
+    "build": "pnpm run --recursive build",
+    "test": "pnpm run --recursive test",
+    "lint": "pnpm run --recursive lint",
+    "clean": "pnpm run --recursive clean && rimraf node_modules",
+    "web": "pnpm --filter web dev",
+    "api": "pnpm --filter api dev"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

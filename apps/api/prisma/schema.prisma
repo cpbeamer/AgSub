@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  FARMER
+  CONSULTANT
+  AUDITOR
+  ADMIN
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum PaymentStatus {
+  PENDING
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ComplianceStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  PENDING_REVIEW
+  VARIANCE_DETECTED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(FARMER)
+  orgId     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+  farms        Farm[]
+  auditLogs    AuditLog[]
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  address   String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+  farms Farm[]
+}
+
+model Farm {
+  id          String   @id @default(cuid())
+  name        String
+  ownerId     String
+  orgId       String
+  acres       Float
+  location    Json     // GeoJSON for farm boundaries
+  address     String
+  crops       String[] // Array of crop types
+  livestock   String[] // Array of livestock types
+  practices   String[] // Current farming practices
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner            User               @relation(fields: [ownerId], references: [id])
+  organization     Organization       @relation(fields: [orgId], references: [id])
+  applications     Application[]
+  complianceLogs   ComplianceLog[]
+  payments         Payment[]
+  enrollments      ProgramEnrollment[]
+  documents        Document[]
+}
+
+model Program {
+  id               String   @id @default(cuid())
+  programId        String   @unique // USDA program ID
+  name             String
+  description      String
+  eligibilityRules Json     // Structured eligibility criteria
+  paymentRates     Json     // Payment structure
+  formsRequired    String[] // Required form IDs
+  startDate        DateTime
+  endDate          DateTime
+  budget           Float?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  applications Application[]
+  enrollments  ProgramEnrollment[]
+  payments     Payment[]
+  notices      Notice[]
+}
+
+model Notice {
+  id          String   @id @default(cuid())
+  programId   String
+  title       String
+  content     String   @db.Text
+  pdfUrl      String?
+  parsedData  Json?    // LLM-parsed structured data
+  publishDate DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program Program @relation(fields: [programId], references: [id])
+}
+
+model Application {
+  id         String            @id @default(cuid())
+  farmId     String
+  programId  String
+  status     ApplicationStatus @default(DRAFT)
+  formData   Json              // Completed form data
+  pdfUrl     String?           // Generated PDF URL
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  reviewNotes String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  farm    Farm    @relation(fields: [farmId], references: [id])
+  program Program @relation(fields: [programId], references: [id])
+}
+
+model ProgramEnrollment {
+  id            String   @id @default(cuid())
+  farmId        String
+  programId     String
+  enrollmentDate DateTime
+  expiryDate    DateTime?
+  isActive      Boolean  @default(true)
+  contractNumber String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  farm    Farm    @relation(fields: [farmId], references: [id])
+  program Program @relation(fields: [programId], references: [id])
+
+  @@unique([farmId, programId])
+}
+
+model ComplianceLog {
+  id           String           @id @default(cuid())
+  farmId       String
+  practice     String
+  date         DateTime
+  description  String?
+  evidence     Json?            // Links to photos, documents
+  satelliteData Json?           // Processed satellite imagery data
+  droneData    Json?            // Drone imagery data
+  acreageReported Float?
+  acreageActual Float?
+  status       ComplianceStatus @default(PENDING_REVIEW)
+  variance     Float?           // Percentage variance if detected
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  farmId        String
+  programId     String
+  amount        Float
+  status        PaymentStatus @default(PENDING)
+  dueDate       DateTime?
+  processedDate DateTime?
+  transactionId String?
+  paymentMethod String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  farm    Farm    @relation(fields: [farmId], references: [id])
+  program Program @relation(fields: [programId], references: [id])
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  farmId     String
+  type       String   // 'shapefile', 'geojson', 'pdf', 'image', etc.
+  name       String
+  url        String
+  size       Int
+  mimeType   String
+  metadata   Json?
+  uploadedBy String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  entityType String   // 'farm', 'application', 'payment', etc.
+  entityId   String
+  action     String   // 'create', 'update', 'delete', 'submit', etc.
+  oldData    Json?
+  newData    Json?
+  metadata   Json?    // Additional context
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([timestamp])
+}
